@@ -27,7 +27,9 @@ int main()
 {
     {
         Car car;
-        car.run();
+        for(int i=0;i<10;i++){
+            car.run();
+        }
     }
 
 
