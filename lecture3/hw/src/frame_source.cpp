@@ -57,7 +57,7 @@ bool ImageSequenceSource::next(Frame &frame)
 
     // TODO: The camera will reuse its internal buffer. Make sure this frame
     // remains valid after the next call to next().
-    frame.image = buffer_;
+    frame.image = buffer_.clone();
 
     if (producer_delay_ms_ > 0)
     {

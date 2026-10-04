@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <thread>
+#include <mutex>
 
 namespace
 {
@@ -14,12 +15,32 @@ namespace
     }
 }
 
-void Statistics::onProduced() { deliberatelySlowIncrement(produced_); }
-void Statistics::onProcessed() { deliberatelySlowIncrement(processed_); }
-void Statistics::onSaved() { deliberatelySlowIncrement(saved_); }
-void Statistics::onCorrupted() { deliberatelySlowIncrement(corrupted_); }
+void Statistics::onProduced()
+{
+    const std::lock_guard<std::mutex> lock(mutex_);
+    deliberatelySlowIncrement(produced_);
+}
+
+void Statistics::onProcessed()
+{
+    const std::lock_guard<std::mutex> lock(mutex_);
+    deliberatelySlowIncrement(processed_);
+}
+
+void Statistics::onSaved()
+{
+    const std::lock_guard<std::mutex> lock(mutex_);
+    deliberatelySlowIncrement(saved_);
+}
+
+void Statistics::onCorrupted()
+{
+    const std::lock_guard<std::mutex> lock(mutex_);
+    deliberatelySlowIncrement(corrupted_);
+}
 
 StatisticsSnapshot Statistics::snapshot() const
 {
+    const std::lock_guard<std::mutex> lock(mutex_);
     return {produced_, processed_, saved_, corrupted_};
 }

@@ -9,7 +9,8 @@
 意味着什么。说明你的修改让一个 `Frame` 在进入队列后拥有什么，并解释为何后续读取
 不会再改变它。
 
-TODO(report)：在此作答。
+图像源模拟相机的可复用缓冲区：`next()` 把读到的图拷进成员 `buffer_`，这块内存会被反复重用。`cv::Mat` 的赋值是浅拷贝，只复制头部而共享像素，所以原来的`frame.image = buffer_;` 让 `Frame` 和 `buffer_` 指向同一块像素，下一次读取复用该内存时就把已经入队的旧帧改写了（worker 的校验因此失败）。我改成 `frame.image = buffer_.clone();`，每次分配新的像素缓冲区并复制数据，`Frame` 从此拥有自己的像素，之后 `buffer_` 被重用与它无关。所有权在 `push(std::move(frame))` 时移交给队列元素，`pop` 时再移动给 worker，最后随 `Frame` 析构释放。
+
 
 ## 2. 并发处理与恰好一次
 
@@ -17,14 +18,15 @@ TODO(report)：在此作答。
 为什么你的实现既不会漏掉已经入队的帧，也不会重复处理同一帧？输入耗尽时，正在等待
 以及仍在处理数据的 worker 分别会怎样？
 
-TODO(report)：在此作答。
+`BlockingQueue` 用 mutex 保护队列，`pop` 在锁内完成"取出并弹出"，所以同一个元素只会交给一个 worker，不会重复处理。`pop` 只在"已经 close 且队列为空"时返回 `false`，因此凡是已入队的帧都会被取走，不会漏帧。producer 读完后调用 `queue_.close()`：`closed_` 置位并唤醒全部等待者，阻塞在 `wait` 的 worker 醒来看到队列已空就退出；正在处理当前帧的 worker 处理完再 `pop`，如果队列还有别人没取走的元素就继续取，直到取空且已关闭才结束。所以 `close()` 表示"不会再有新数据"，而不是"丢弃剩余数据"，正常路径下 20 帧全部被处理并保存。producer 用 `push(std::move(frame))` 把数据所有权移入队列，避免多余的引用计数，也避免本地变量与队列元素共享像素。
+
 
 ## 3. 共享统计数据
 
 指出哪些线程会读写 `Statistics`。解释原实现中的竞争为什么可能导致错误结果，并说明
 你的同步方案提供了什么保证。还应说明取得快照时为什么是安全的。
 
-TODO(report)：在此作答。
+producer 调用 `onProduced()`，每个 worker 调用 `onProcessed()` / `onSaved()` / `onCorrupted()`，main 在 `wait()` 之后调用 `snapshot()`。原来的自增多个线程交错时后写的会覆盖先写的结果，造成丢失更新、计数偏小，属于数据竞争。我的方案是在 `Statistics` 里加一把 mutex，四个 `onXxx()`和 `snapshot()`都在同一临界区内执行：同一时刻只有一个线程能读改写计数器，每次自增都会生效；锁的获取与释放还建立了happens-before 关系，消除了数据竞争。`snapshot()` 加锁后一次性读取四个计数器，返回的是一致快照，不会出现 processed 已增加而 saved 还没增加的中间状态。锁成员声明为 mutable，所以 const 的 `snapshot()` 也能加锁；加锁不改变对象状态，因此 main 在其它线程仍在运行或已 join 之后调用都是安全的。
 
 ## 4. 线程关闭协议
 
@@ -36,6 +38,6 @@ TODO(report)：在此作答。
 
 如果你的实现允许某个生命周期方法被重复调用，也请说明其行为；如果不允许，请说明前置条件。
 
-TODO(report)：在此作答。
+显式 `wait()` 路径：`start()` 先创建 worker（它们立刻阻塞在 `pop` 上）再创建 producer；producer 逐帧`next()` → `push`，输入耗尽后调用 `queue_.close()` 唤醒所有阻塞的 worker 并结束自己；worker 取完队列剩余元素后 `pop` 返回 `false` 而结束；`wait()` 依次 join `producer_` 和 `workers_`，返回时所有线程都已结束，之后再读统计或析构成员都不会悬空。直接析构路径：`~Pipeline()` 先 `queue_.close()`，唤醒阻塞的 worker 并让之后的 `push` 变成空操作，然后调用 `wait()` join 全部线程；析构函数体结束时线程都已结束，成员才随后按声明逆序销毁，所以不存在线程访问已销毁对象的悬空访问，也不会有仍 joinable 的 `std::thread`被析构，从而不会触发 `std::terminate`。这条路径下 producer 的 `push` 会被丢弃，部分帧不被处理，但这只影响处理数量、不影响安全性，且输入有限，`next()` 最终返回 false，不会永久等待。重复调用方面：`wait()`允许重复调用、也允许在 `start()` 之前调用，`joinable()` 检查使它成为无害的空操作，`queue_.close()`重复调用同样安全；`start()` 不允许重复调用（会再启动一批线程），这是它的前置条件。
 
 
