@@ -14,7 +14,11 @@ public:
     SensorPublisher()
         : Node("sensor_publisher")
     {
-        this->declare_parameter("reliability", "best_effort");
+        // 起两个终端，两个终端都需要先 source install/setup.sh 来加载工作环境
+        // 发布 ros2 run qos_debugger qos_debgger_pub
+        // 订阅 ros2 run qos_debugger qos_debgger_sub
+        // 之前是DDS中不满足匹配规则，就把pub的qos改成reliable就行了
+        this->declare_parameter("reliability", "reliable");
         this->declare_parameter("depth", 10);
         this->declare_parameter("rate", 100.0);
 

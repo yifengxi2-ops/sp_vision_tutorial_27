@@ -18,8 +18,10 @@ public:
       : Node("sensor_subscriber")
   {
     this->declare_parameter("reliability", "reliable");
-    this->declare_parameter("depth", 10);
-    this->declare_parameter("callback_delay_ms", 30);
+    this->declare_parameter("depth", 100);
+    //pub是100Hz,但是sub是30ms，消费能力不够，所以改成1ms，同时加大队列
+    //和任务1一样的命令
+    this->declare_parameter("callback_delay_ms", 1);
 
     reliability_ = this->get_parameter("reliability").as_string();
     depth_ = this->get_parameter("depth").as_int();
@@ -96,6 +98,7 @@ private:
     else if (msg->seq > expected_seq_)
     {
       const uint32_t lost = msg->seq - expected_seq_;
+      lost_count_ += lost;
       RCLCPP_WARN(
           this->get_logger(),
           "检测到丢包: 期望 seq=%u, 实际 seq=%u, 丢失 %u 条",
@@ -128,10 +131,18 @@ private:
         "累计: 收到 %u 条, 丢失 %u 条, 丢包率 %.2f%%",
         received_count_, lost_count_, loss_rate);
 
-    /*
-    在这之间加入计算帧率并打印的代码
+    // 计算帧率就是发送的消息条数除以时间间隔
+    const auto now = std::chrono::steady_clock::now();
+    const double dt = std::chrono::duration<double>(now - last_report_time_).count();
+    const uint32_t frames = received_count_ - last_received_count_;
+    const double fps = (dt > 0.0) ? static_cast<double>(frames) / dt : 0.0;
 
-    */
+    last_received_count_ = received_count_;
+    last_report_time_ = now;
+
+    RCLCPP_INFO(
+        this->get_logger(), "帧率: %.2f Hz (本周期 %u 条 / %.3f s)",
+        fps, frames, dt);
   }
 
   rclcpp::Subscription<nav_hw_interfaces::msg::SensorData>::SharedPtr subscription_;
