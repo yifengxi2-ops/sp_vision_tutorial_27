@@ -52,6 +52,14 @@ void PidController::configure(
   if (!std::isfinite(lookahead_distance_) || lookahead_distance_ <= 0.0) {
     throw std::invalid_argument("lookahead_distance must be finite and positive");
   }
+
+  position_gain_    = node_->declare_parameter<double>(plugin_name_ + ".position_gain", 1.0);
+  max_linear_speed_ = node_->declare_parameter<double>(plugin_name_ + ".max_linear_speed", 0.2);
+
+  if (!std::isfinite(position_gain_) || position_gain_ <= 0.0 ||
+      !std::isfinite(max_linear_speed_) || max_linear_speed_ <= 0.0) {
+    throw std::invalid_argument("Position gain and speed limit must be finite and positive");
+  }
 }
 
 void PidController::setPlan(const nav_msgs::msg::Path & path)
@@ -142,6 +150,20 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
   RCLCPP_DEBUG(
       node_->get_logger(), "Target error: (%.3f, %.3f), distance: %.3f", error_x, error_y,
       target_distance);
+
+  double desired_vx = position_gain_ * error_x;
+  double desired_vy = position_gain_ * error_y;
+
+  const double desired_speed = std::hypot(desired_vx, desired_vy);
+
+  if (desired_speed > max_linear_speed_) {
+    const double scale  = max_linear_speed_ / desired_speed;
+    desired_vx         *= scale;
+    desired_vy         *= scale;
+  }
+
+  RCLCPP_DEBUG(
+      node_->get_logger(), "Desired path-frame velocity: (%.3f, %.3f)", desired_vx, desired_vy);
 
   RCLCPP_WARN_THROTTLE(
       node_->get_logger(), *node_->get_clock(), 5000,

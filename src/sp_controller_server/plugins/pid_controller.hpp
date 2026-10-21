@@ -37,6 +37,8 @@ private:
   nav_msgs::msg::Path              global_plan_;
   std::string                      base_frame_id_;
   double                           lookahead_distance_{0.4};
+  double                           position_gain_{1.0};
+  double                           max_linear_speed_{0.2};
 };
 
 }
