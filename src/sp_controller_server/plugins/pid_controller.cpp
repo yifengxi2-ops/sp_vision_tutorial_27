@@ -6,6 +6,8 @@
 #include <sstream>
 #include <stdexcept>
 
+#include <limits>
+
 namespace {
 
 [[noreturn]] void sp_nav_param_error(const rclcpp::Node & node, const std::string & name)
@@ -59,7 +61,7 @@ void PidController::setPlan(const nav_msgs::msg::Path & path)
 }
 
 geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
-    const geometry_msgs::msg::PoseStamped &, const geometry_msgs::msg::Twist &)
+    const geometry_msgs::msg::PoseStamped & pose, const geometry_msgs::msg::Twist &)
 {
   // TODO：在此实现路径跟踪
   geometry_msgs::msg::TwistStamped cmd_vel;
@@ -69,6 +71,28 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
   if (global_plan_.poses.empty()) {
     return cmd_vel;  // 返回空速度
   }
+
+  // 遍历寻找路径的最近点
+  const double robot_x = pose.pose.position.x;
+  const double robot_y = pose.pose.position.y;
+
+  std::size_t nearest_index        = 0;
+  double      min_distance_squared = std::numeric_limits<double>::infinity();
+
+  for (std::size_t i = 0; i < global_plan_.poses.size(); ++i) {
+    const auto & point            = global_plan_.poses[i].pose.position;
+    const double dx               = point.x - robot_x;
+    const double dy               = point.y - robot_y;
+    const double distance_squared = dx * dx + dy * dy;
+    if (distance_squared < min_distance_squared) {
+      min_distance_squared = distance_squared;
+      nearest_index        = i;
+    }
+  }
+
+  RCLCPP_DEBUG(
+      node_->get_logger(), "Nearest index: %zu,squared distance: %.4f", nearest_index,
+      min_distance_squared);
 
   RCLCPP_WARN_THROTTLE(
       node_->get_logger(), *node_->get_clock(), 5000,
