@@ -77,15 +77,33 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
     return cmd_vel;  // 返回空速度
   }
 
+  // 检查坐标系一致
+  if (global_plan_.header.frame_id.empty() ||
+      pose.header.frame_id != global_plan_.header.frame_id) {
+    RCLCPP_WARN_THROTTLE(
+        node_->get_logger(), *node_->get_clock(), 2000,
+        "Pose and path must have the same non-empty frame");
+    return cmd_vel;
+  }
+
   // 遍历寻找路径的最近点
   const double robot_x = pose.pose.position.x;
   const double robot_y = pose.pose.position.y;
+
+  if (!std::isfinite(robot_x) || !std::isfinite(robot_y)) {
+    return cmd_vel;
+  }
 
   std::size_t nearest_index        = 0;
   double      min_distance_squared = std::numeric_limits<double>::infinity();
 
   for (std::size_t i = 0; i < global_plan_.poses.size(); ++i) {
-    const auto & point            = global_plan_.poses[i].pose.position;
+    const auto & point = global_plan_.poses[i].pose.position;
+
+    if (!std::isfinite(point.x) || !std::isfinite(point.y)) {
+      return cmd_vel;
+    }
+
     const double dx               = point.x - robot_x;
     const double dy               = point.y - robot_y;
     const double distance_squared = dx * dx + dy * dy;
@@ -116,6 +134,14 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
   RCLCPP_DEBUG(
       node_->get_logger(), "Target index: %zu, position: (%.3f, %.3f)", target_index, target.x,
       target.y);
+
+  const double error_x         = target.x - robot_x;
+  const double error_y         = target.y - robot_y;
+  const double target_distance = std::hypot(error_x, error_y);
+
+  RCLCPP_DEBUG(
+      node_->get_logger(), "Target error: (%.3f, %.3f), distance: %.3f", error_x, error_y,
+      target_distance);
 
   RCLCPP_WARN_THROTTLE(
       node_->get_logger(), *node_->get_clock(), 5000,
