@@ -9,6 +9,9 @@
 #include <limits>
 #include <cmath>
 
+#include <tf2/utils.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+
 namespace {
 
 [[noreturn]] void sp_nav_param_error(const rclcpp::Node & node, const std::string & name)
@@ -164,6 +167,30 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
 
   RCLCPP_DEBUG(
       node_->get_logger(), "Desired path-frame velocity: (%.3f, %.3f)", desired_vx, desired_vy);
+
+  const auto & orientation = pose.pose.orientation;
+
+  if (!std::isfinite(orientation.x) || !std::isfinite(orientation.y) ||
+      !std::isfinite(orientation.z) || !std::isfinite(orientation.w)) {
+    return cmd_vel;
+  }
+
+  tf2::Quaternion rotation;
+  tf2::fromMsg(orientation, rotation);
+
+  if (rotation.length2() < 1e-12) {
+    return cmd_vel;
+  }
+
+  rotation.normalize();  // 归一化避免无效旋转
+  const double yaw = tf2::getYaw(rotation);
+
+  // 进行坐标转换
+  const double body_vx = std::cos(yaw) * desired_vx + std::sin(yaw) * desired_vy;
+  const double body_vy = -std::sin(yaw) * desired_vx + std::cos(yaw) * desired_vy;
+
+  RCLCPP_DEBUG(
+      node_->get_logger(), "Yaw: %.3f, body velocity: (%.3f, %.3f)", yaw, body_vx, body_vy);
 
   RCLCPP_WARN_THROTTLE(
       node_->get_logger(), *node_->get_clock(), 5000,
