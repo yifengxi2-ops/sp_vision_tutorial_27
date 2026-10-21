@@ -39,6 +39,7 @@ private:
   double                           lookahead_distance_{0.4};
   double                           position_gain_{1.0};
   double                           max_linear_speed_{0.2};
+  double                           goal_tolerance_{0.18};
 };
 
 }

@@ -63,6 +63,12 @@ void PidController::configure(
       !std::isfinite(max_linear_speed_) || max_linear_speed_ <= 0.0) {
     throw std::invalid_argument("Position gain and speed limit must be finite and positive");
   }
+
+  goal_tolerance_ = node_->declare_parameter<double>(plugin_name_ + ".goal_tolerance", 0.18);
+
+  if (!std::isfinite(goal_tolerance_) || goal_tolerance_ <= 0.0) {
+    throw std::invalid_argument("Goal tolerance must be finite and positive");
+  }
 }
 
 void PidController::setPlan(const nav_msgs::msg::Path & path)
@@ -122,6 +128,13 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
       min_distance_squared = distance_squared;
       nearest_index        = i;
     }
+  }
+
+  const auto & goal          = global_plan_.poses.back().pose.position;
+  const double goal_distance = std::hypot(goal.x - robot_x, goal.y - robot_y);
+
+  if (goal_distance <= goal_tolerance_) {
+    return cmd_vel;
   }
 
   RCLCPP_DEBUG(
