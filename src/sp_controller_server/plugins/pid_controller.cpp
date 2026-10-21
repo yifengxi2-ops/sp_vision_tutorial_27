@@ -34,12 +34,12 @@ T require_param(const rclcpp::Node::SharedPtr & node, const std::string & name)
 namespace pid_controller {
 
 void PidController::configure(
-  const rclcpp::Node::SharedPtr & node, const std::string & name,
-  const std::shared_ptr<tf2_ros::Buffer> & tf_buffer)
+    const rclcpp::Node::SharedPtr & node, const std::string & name,
+    const std::shared_ptr<tf2_ros::Buffer> & tf_buffer)
 {
-  node_ = node;
+  node_        = node;
   plugin_name_ = name;
-  tf_buffer_ = tf_buffer;
+  tf_buffer_   = tf_buffer;
   if (!node_) {
     throw std::runtime_error("PidController received null node");
   }
@@ -50,20 +50,30 @@ void PidController::configure(
 void PidController::setPlan(const nav_msgs::msg::Path & path)
 {
   global_plan_ = path;
+
+  if (global_plan_.poses.empty()) {
+    RCLCPP_WARN(node_->get_logger(), "Received an empty path");
+    return;
+  }
+  RCLCPP_DEBUG(node_->get_logger(), "Received a path with %zu poses", global_plan_.poses.size());
 }
 
 geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
-  const geometry_msgs::msg::PoseStamped &,
-  const geometry_msgs::msg::Twist &)
+    const geometry_msgs::msg::PoseStamped &, const geometry_msgs::msg::Twist &)
 {
   // TODO：在此实现路径跟踪
   geometry_msgs::msg::TwistStamped cmd_vel;
-  cmd_vel.header.stamp = node_->now();
+  cmd_vel.header.stamp    = node_->now();
   cmd_vel.header.frame_id = base_frame_id_;
+
+  if (global_plan_.poses.empty()) {
+    return cmd_vel;  // 返回空速度
+  }
+
   RCLCPP_WARN_THROTTLE(
-    node_->get_logger(), *node_->get_clock(), 5000,
-    "[%s] Controller plugin not implemented — implement computeVelocityCommands()",
-    plugin_name_.c_str());
+      node_->get_logger(), *node_->get_clock(), 5000,
+      "[%s] Controller plugin not implemented — implement computeVelocityCommands()",
+      plugin_name_.c_str());
   return cmd_vel;
 }
 
