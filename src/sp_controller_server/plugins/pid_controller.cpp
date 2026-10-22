@@ -205,6 +205,9 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
   RCLCPP_DEBUG(
       node_->get_logger(), "Yaw: %.3f, body velocity: (%.3f, %.3f)", yaw, body_vx, body_vy);
 
+  cmd_vel.twist.linear.x = body_vx;
+  cmd_vel.twist.linear.y = body_vy;
+
   RCLCPP_WARN_THROTTLE(
       node_->get_logger(), *node_->get_clock(), 5000,
       "[%s] Controller plugin not implemented — implement computeVelocityCommands()",
