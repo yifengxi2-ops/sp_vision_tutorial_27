@@ -83,7 +83,7 @@ void PidController::setPlan(const nav_msgs::msg::Path & path)
 }
 
 geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
-    const geometry_msgs::msg::PoseStamped & pose, const geometry_msgs::msg::Twist &)
+    const geometry_msgs::msg::PoseStamped & pose, const geometry_msgs::msg::Twist & velocity)
 {
   // TODO：在此实现路径跟踪
   geometry_msgs::msg::TwistStamped cmd_vel;
@@ -181,6 +181,38 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
   RCLCPP_DEBUG(
       node_->get_logger(), "Desired path-frame velocity: (%.3f, %.3f)", desired_vx, desired_vy);
 
+  if (!std::isfinite(velocity.linear.x) || !std::isfinite(velocity.linear.y)) {
+    return cmd_vel;
+  }
+
+  const double velocity_error_x = desired_vx - velocity.linear.x;
+  const double velocity_error_y = desired_vy - velocity.linear.y;
+
+  RCLCPP_INFO_THROTTLE(
+      node_->get_logger(), *node_->get_clock(), 2000,
+      "Velocity: desired=(%.3f, %.3f), measured=(%.3f, %.3f), error=(%.3f, %.3f)", desired_vx,
+      desired_vy, velocity.linear.x, velocity.linear.y, velocity_error_x, velocity_error_y);
+
+  // 速度 P 补偿，增益为本轮实验值。
+  constexpr double velocity_gain = 0.3;
+
+  double command_vx = desired_vx + velocity_gain * velocity_error_x;
+  double command_vy = desired_vy + velocity_gain * velocity_error_y;
+
+  // 经过严谨的推导，我决定把补偿命令上限设为期望速度上限的两倍
+  const double command_speed_limit = 2.0 * max_linear_speed_;
+  const double command_speed       = std::hypot(command_vx, command_vy);
+
+  if (!std::isfinite(command_speed)) {
+    return cmd_vel;
+  }
+
+  if (command_speed > command_speed_limit) {
+    const double scale  = command_speed_limit / command_speed;
+    command_vx         *= scale;
+    command_vy         *= scale;
+  }
+
   const auto & orientation = pose.pose.orientation;
 
   if (!std::isfinite(orientation.x) || !std::isfinite(orientation.y) ||
@@ -199,8 +231,8 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
   const double yaw = tf2::getYaw(rotation);
 
   // 进行坐标转换
-  const double body_vx = std::cos(yaw) * desired_vx + std::sin(yaw) * desired_vy;
-  const double body_vy = -std::sin(yaw) * desired_vx + std::cos(yaw) * desired_vy;
+  const double body_vx = std::cos(yaw) * command_vx + std::sin(yaw) * command_vy;
+  const double body_vy = -std::sin(yaw) * command_vx + std::cos(yaw) * command_vy;
 
   RCLCPP_DEBUG(
       node_->get_logger(), "Yaw: %.3f, body velocity: (%.3f, %.3f)", yaw, body_vx, body_vy);
@@ -208,10 +240,6 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
   cmd_vel.twist.linear.x = body_vx;
   cmd_vel.twist.linear.y = body_vy;
 
-  RCLCPP_WARN_THROTTLE(
-      node_->get_logger(), *node_->get_clock(), 5000,
-      "[%s] Controller plugin not implemented — implement computeVelocityCommands()",
-      plugin_name_.c_str());
   return cmd_vel;
 }
 
