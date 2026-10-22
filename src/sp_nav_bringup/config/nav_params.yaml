@@ -1,41 +1,41 @@
 # TODO: 在此补全参数
 planner_server:
   ros__parameters:
-    costmap_topic: 
-    local_costmap_topic:
-    path_topic:
-    plugin_name:
-    plugin_type:
+    costmap_topic: "/global_costmap"
+    local_costmap_topic: "/local_costmap/costmap"
+    path_topic: "/global_path"
+    plugin_name: "AStar"
+    plugin_type: "sp_global_planner/AStarPlanner"
 
     AStar:
-      lethal_cost:
-      cost_weight:
+      lethal_cost: 100
+      cost_weight: 2.0
 
 esdf_map_publisher:
   ros__parameters:
-    map_yaml:
+    map_yaml: "package://sp_nav_bringup/map/maze_map.yaml"
     frame_id: "map"
     publish_rate_hz: 1.0
     unknown_as_obstacle: false
-    robot_radius: 
-    margin:
-    d_safe:
-    w:
-    unknown_cost:
+    robot_radius: 0.25
+    margin: 0.05
+    d_safe: 0.70
+    w: 12.0
+    unknown_cost: 100
     visualize_esdf: false
 
 controller_server:
   ros__parameters:
-    local_path_topic:
-    odom_topic:
-    odom_frame_id:
+    local_path_topic: "/global_path"
+    odom_topic: "/Odometry"
+    odom_frame_id: "lidar_odom"
     map_frame_id: "map"
-    cmd_vel_topic:
+    cmd_vel_topic: "/sentry/cmd_vel"
     base_frame_id: "base_link"
     control_frequency: 50.0
 
-    plugin_name:
-    plugin_type:
+    plugin_name: "PidController"
+    plugin_type: "PidController"
 
     PidController:
       base_frame_id: "base_link"
