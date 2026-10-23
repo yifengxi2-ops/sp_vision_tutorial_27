@@ -11,6 +11,7 @@ find_package(pluginlib REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(robot_msg REQUIRED)
 include_directories(include)
 add_library(controller_server_core SHARED
   src/controller_server.cpp
@@ -22,6 +23,7 @@ ament_target_dependencies(controller_server_core
   geometry_msgs
   pluginlib
   std_srvs
+  robot_msg
   tf2_ros
   tf2_geometry_msgs
 )

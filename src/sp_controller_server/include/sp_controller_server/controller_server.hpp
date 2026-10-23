@@ -11,6 +11,7 @@
 #include <pluginlib/class_loader.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/set_bool.hpp>
+#include <robot_msg/msg/robot_kinematics_array.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
@@ -18,8 +19,7 @@
 
 namespace sp_controller_server {
 
-class ControllerServer : public rclcpp::Node
-{
+class ControllerServer : public rclcpp::Node {
 public:
   ControllerServer();
   ~ControllerServer() override = default;
@@ -30,25 +30,34 @@ private:
   void loadPlugin();
   void onLocalPath(const nav_msgs::msg::Path::SharedPtr msg);
   void onOdometry(const nav_msgs::msg::Odometry::SharedPtr msg);
+  void onRobots(const robot_msg::msg::RobotKinematicsArray::SharedPtr msg);
   void controlLoop();
-  geometry_msgs::msg::PoseStamped getCurrentPose(const std::string & frame_id);
-  void onSetControlEnable(
-    const std_srvs::srv::SetBool::Request::SharedPtr request,
-    std_srvs::srv::SetBool::Response::SharedPtr response);
 
-  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr local_path_sub_;
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
-  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
-  rclcpp::TimerBase::SharedPtr control_timer_;
-  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_control_enable_srv_;
+  geometry_msgs::msg::PoseStamped getCurrentPose(const std::string & frame_id);
+
+  void onSetControlEnable(
+      const std_srvs::srv::SetBool::Request::SharedPtr request,
+      std_srvs::srv::SetBool::Response::SharedPtr      response);
+
+  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr                  local_path_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr              odom_sub_;
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr               cmd_vel_pub_;
+  rclcpp::TimerBase::SharedPtr                                          control_timer_;
+  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr                    set_control_enable_srv_;
+  rclcpp::Subscription<robot_msg::msg::RobotKinematicsArray>::SharedPtr robots_sub_;
+
+  std::mutex                      robot_state_mutex_;
+  geometry_msgs::msg::PoseStamped robot_pose_map_;
+  geometry_msgs::msg::Twist       robot_velocity_map_;
+  bool                            have_robot_state_{false};
 
   pluginlib::ClassLoader<sp_controller_server::ControllerPlugin> loader_;
-  std::shared_ptr<sp_controller_server::ControllerPlugin> controller_;
+  std::shared_ptr<sp_controller_server::ControllerPlugin>        controller_;
 
-  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::Buffer>            tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
-  nav_msgs::msg::Path latest_path_;
+  nav_msgs::msg::Path       latest_path_;
   geometry_msgs::msg::Twist current_velocity_;
   geometry_msgs::msg::Twist current_velocity_map_;
 
