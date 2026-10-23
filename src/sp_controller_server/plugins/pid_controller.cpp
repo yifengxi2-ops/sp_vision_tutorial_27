@@ -237,6 +237,14 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
   RCLCPP_DEBUG(
       node_->get_logger(), "Yaw: %.3f, body velocity: (%.3f, %.3f)", yaw, body_vx, body_vy);
 
+  RCLCPP_INFO(
+      node_->get_logger(),
+      "TRACE pos=(%.4f,%.4f) target=(%.4f,%.4f) yaw=%.4f "
+      "v_ref=(%.4f,%.4f) v_meas=(%.4f,%.4f) "
+      "cmd_map=(%.4f,%.4f) cmd_body=(%.4f,%.4f)",
+      robot_x, robot_y, target.x, target.y, yaw, desired_vx, desired_vy, velocity.linear.x,
+      velocity.linear.y, command_vx, command_vy, body_vx, body_vy);
+
   cmd_vel.twist.linear.x = body_vx;
   cmd_vel.twist.linear.y = body_vy;
 

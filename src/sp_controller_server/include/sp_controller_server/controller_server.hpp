@@ -18,8 +18,7 @@
 
 namespace sp_controller_server {
 
-class ControllerServer : public rclcpp::Node
-{
+class ControllerServer : public rclcpp::Node {
 public:
   ControllerServer();
   ~ControllerServer() override = default;
@@ -31,29 +30,34 @@ private:
   void onLocalPath(const nav_msgs::msg::Path::SharedPtr msg);
   void onOdometry(const nav_msgs::msg::Odometry::SharedPtr msg);
   void controlLoop();
-  geometry_msgs::msg::PoseStamped getCurrentPose(const std::string & frame_id);
-  void onSetControlEnable(
-    const std_srvs::srv::SetBool::Request::SharedPtr request,
-    std_srvs::srv::SetBool::Response::SharedPtr response);
 
-  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr local_path_sub_;
+  geometry_msgs::msg::PoseStamped getCurrentPose(const std::string & frame_id);
+  void                            onSetControlEnable(
+      const std_srvs::srv::SetBool::Request::SharedPtr request,
+      std_srvs::srv::SetBool::Response::SharedPtr      response);
+
+  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr     local_path_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
-  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
-  rclcpp::TimerBase::SharedPtr control_timer_;
-  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_control_enable_srv_;
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr  cmd_vel_pub_;
+  rclcpp::TimerBase::SharedPtr                             control_timer_;
+  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr       set_control_enable_srv_;
 
   pluginlib::ClassLoader<sp_controller_server::ControllerPlugin> loader_;
-  std::shared_ptr<sp_controller_server::ControllerPlugin> controller_;
+  std::shared_ptr<sp_controller_server::ControllerPlugin>        controller_;
 
-  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::Buffer>            tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
-  nav_msgs::msg::Path latest_path_;
+  nav_msgs::msg::Path       latest_path_;
   geometry_msgs::msg::Twist current_velocity_;
   geometry_msgs::msg::Twist current_velocity_map_;
 
   std::mutex path_mutex_;
   std::mutex velocity_mutex_;
+
+  std::mutex              odom_state_mutex_;
+  nav_msgs::msg::Odometry latest_odom_;
+  bool                    have_odom_state_{false};
 
   std::string local_path_topic_;
   std::string odom_topic_;

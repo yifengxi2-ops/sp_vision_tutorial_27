@@ -268,7 +268,15 @@ class SimRobotNode(Node):
             callback_group=self._odom_callback_group,
         )
 
-        self.create_subscription(Twist, cmd_vel_topic, self._on_cmd_vel, 10)
+        # 临时诊断：避免指令接收与地图计算共用互斥组。
+        self._cmd_callback_group = MutuallyExclusiveCallbackGroup()
+        self.create_subscription(
+            Twist,
+            cmd_vel_topic,
+            self._on_cmd_vel,
+            10,
+            callback_group=self._cmd_callback_group,
+        )
         self.create_subscription(GimbalControlMsg, gimbal_topic, self._on_gimbal, 10)
         self.create_subscription(ChassisModeMsg, chassis_topic, self._on_chassis_mode, 10)
 
@@ -305,8 +313,18 @@ class SimRobotNode(Node):
         self.static_tf_broadcaster.sendTransform(t)
 
     def _on_cmd_vel(self, msg: Twist):
-        now_ns = self.get_clock().now().nanoseconds
-        self.sentry.on_cmd_vel(float(msg.linear.x), float(msg.linear.y), now_ns)
+        received_ns = self.get_clock().now().nanoseconds
+        vx = float(msg.linear.x)
+        vy = float(msg.linear.y)
+
+        self.sentry.on_cmd_vel(vx, vy, received_ns)
+
+        stored_ns = self.get_clock().now().nanoseconds
+        self.get_logger().info(
+            f"CMD_RX received_ns={received_ns} "
+            f"stored_ns={stored_ns} "
+            f"body=({vx:.9f},{vy:.9f})"
+        )
 
     def _on_gimbal(self, msg: GimbalControlMsg):
         self.sentry.on_gimbal_control(
