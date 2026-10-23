@@ -244,8 +244,8 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
   const double pose_age = (diagnostic_now - pose_time).seconds();
 
   // 每秒输出一次，避免每个控制周期都刷屏。
-  RCLCPP_INFO_THROTTLE(
-      node_->get_logger(), *node_->get_clock(), 1000,
+  RCLCPP_INFO(
+      node_->get_logger(),
       "TRACK now=%.3f pose_stamp=%.3f age=%.3f "
       "pos=(%.3f,%.3f) target=(%.3f,%.3f) yaw=%.3f "
       "v_ref=(%.3f,%.3f) v_meas=(%.3f,%.3f) "
