@@ -13,7 +13,7 @@ fi
 open_terminal() {
     local title="$1"
     local cmd="$2"
-    local full_cmd="${WSL_GPU_ENV} source /opt/ros/humble/setup.bash && source \"$WS_DIR/install/local_setup.bash\" && $cmd; exec bash"
+    local full_cmd="${WSL_GPU_ENV} source $SETUP_FILE && $cmd; exec bash"
     if command -v gnome-terminal &>/dev/null; then
         gnome-terminal --title="$title" -- bash -c "$full_cmd" &
     elif command -v xterm &>/dev/null; then

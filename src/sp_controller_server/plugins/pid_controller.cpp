@@ -237,23 +237,6 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
   RCLCPP_DEBUG(
       node_->get_logger(), "Yaw: %.3f, body velocity: (%.3f, %.3f)", yaw, body_vx, body_vy);
 
-  // pose.header.stamp 来自服务器查询到的 TF 源时间。
-  const auto         diagnostic_now = node_->now();
-  const rclcpp::Time pose_time(pose.header.stamp, diagnostic_now.get_clock_type());
-
-  const double pose_age = (diagnostic_now - pose_time).seconds();
-
-  // 每秒输出一次，避免每个控制周期都刷屏。
-  RCLCPP_INFO(
-      node_->get_logger(),
-      "TRACK now=%.3f pose_stamp=%.3f age=%.3f "
-      "pos=(%.3f,%.3f) target=(%.3f,%.3f) yaw=%.3f "
-      "v_ref=(%.3f,%.3f) v_meas=(%.3f,%.3f) "
-      "cmd_map=(%.3f,%.3f) cmd_body=(%.3f,%.3f)",
-      diagnostic_now.seconds(), pose_time.seconds(), pose_age, robot_x, robot_y, target.x, target.y,
-      yaw, desired_vx, desired_vy, velocity.linear.x, velocity.linear.y, command_vx, command_vy,
-      body_vx, body_vy);
-
   cmd_vel.twist.linear.x = body_vx;
   cmd_vel.twist.linear.y = body_vy;
 

@@ -11,7 +11,6 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.exceptions import ParameterUninitializedException
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from ament_index_python.packages import get_package_share_directory
 
 from std_msgs.msg import Header
@@ -41,17 +40,17 @@ from sp_nav_sim.sim.sim_gui import SimGui
 
 
 def _resolve_package_uri(raw: str) -> str:
-    if not raw or raw.startswith("/"):
+    if not raw or raw.startswith('/'):
         return raw
     rest = raw
-    prefix = "package://"
+    prefix = 'package://'
     if raw.startswith(prefix):
-        rest = raw[len(prefix) :]
-    slash = rest.find("/")
+        rest = raw[len(prefix):]
+    slash = rest.find('/')
     if slash < 0:
         return raw
     pkg = rest[:slash]
-    rel = rest[slash + 1 :]
+    rel = rest[slash + 1:]
     return os.path.join(get_package_share_directory(pkg), rel)
 
 
@@ -70,103 +69,99 @@ class SimRobotNode(Node):
             raise RuntimeError(_param_missing_msg(self.get_name(), name)) from exc
 
     def __init__(self):
-        super().__init__("sim_robot_node")
+        super().__init__('sim_robot_node')
 
-        self.declare_parameter("map_yaml", Parameter.Type.STRING)
-        self.declare_parameter("topic", Parameter.Type.STRING)
-        self.declare_parameter("frame_id", Parameter.Type.STRING)
+        self.declare_parameter('map_yaml', Parameter.Type.STRING)
+        self.declare_parameter('topic', Parameter.Type.STRING)
+        self.declare_parameter('frame_id', Parameter.Type.STRING)
 
-        self.declare_parameter("publish_hz", Parameter.Type.DOUBLE)
-        self.declare_parameter("pub_hz", Parameter.Type.DOUBLE)
-        self.declare_parameter("odom_hz", Parameter.Type.DOUBLE)
+        self.declare_parameter('publish_hz', Parameter.Type.DOUBLE)
+        self.declare_parameter('pub_hz', Parameter.Type.DOUBLE)
+        self.declare_parameter('odom_hz', Parameter.Type.DOUBLE)
 
-        self.declare_parameter("v_max", Parameter.Type.DOUBLE)
-        self.declare_parameter("a_max", Parameter.Type.DOUBLE)
-        self.declare_parameter("robot_radius", Parameter.Type.DOUBLE)
-        self.declare_parameter("margin", Parameter.Type.DOUBLE)
-        self.declare_parameter("d_safe", Parameter.Type.DOUBLE)
-        self.declare_parameter("w", Parameter.Type.DOUBLE)
+        self.declare_parameter('v_max', Parameter.Type.DOUBLE)
+        self.declare_parameter('a_max', Parameter.Type.DOUBLE)
+        self.declare_parameter('robot_radius', Parameter.Type.DOUBLE)
+        self.declare_parameter('margin', Parameter.Type.DOUBLE)
+        self.declare_parameter('d_safe', Parameter.Type.DOUBLE)
+        self.declare_parameter('w', Parameter.Type.DOUBLE)
 
-        self.declare_parameter("window_width", Parameter.Type.INTEGER)
-        self.declare_parameter("window_height", Parameter.Type.INTEGER)
+        self.declare_parameter('window_width', Parameter.Type.INTEGER)
+        self.declare_parameter('window_height', Parameter.Type.INTEGER)
 
-        self.declare_parameter("treat_unknown_as_occupied", Parameter.Type.BOOL)
+        self.declare_parameter('treat_unknown_as_occupied', Parameter.Type.BOOL)
 
-        self.declare_parameter("pos_noise_std", Parameter.Type.DOUBLE)
-        self.declare_parameter("seed", Parameter.Type.INTEGER)
+        self.declare_parameter('pos_noise_std', Parameter.Type.DOUBLE)
+        self.declare_parameter('seed', Parameter.Type.INTEGER)
 
-        self.declare_parameter("robot_id", Parameter.Type.INTEGER)
-        self.declare_parameter("init_x", Parameter.Type.DOUBLE)
-        self.declare_parameter("init_y", Parameter.Type.DOUBLE)
-        self.declare_parameter("tf_child_frame_id", Parameter.Type.STRING)
-        self.declare_parameter("cmd_vel_topic", Parameter.Type.STRING)
-        self.declare_parameter("cmd_vel_timeout", Parameter.Type.DOUBLE)
-        self.declare_parameter("odom_topic", Parameter.Type.STRING)
-        self.declare_parameter("odom_frame_id", Parameter.Type.STRING)
-        self.declare_parameter("local_costmap_topic", Parameter.Type.STRING)
-        self.declare_parameter("local_costmap_width_m", Parameter.Type.DOUBLE)
-        self.declare_parameter("local_costmap_height_m", Parameter.Type.DOUBLE)
-        self.declare_parameter("gimbal_topic", Parameter.Type.STRING)
-        self.declare_parameter("scan_speed", Parameter.Type.DOUBLE)
-        self.declare_parameter("chassis_topic", Parameter.Type.STRING)
+        self.declare_parameter('robot_id', Parameter.Type.INTEGER)
+        self.declare_parameter('init_x', Parameter.Type.DOUBLE)
+        self.declare_parameter('init_y', Parameter.Type.DOUBLE)
+        self.declare_parameter('tf_child_frame_id', Parameter.Type.STRING)
+        self.declare_parameter('cmd_vel_topic', Parameter.Type.STRING)
+        self.declare_parameter('cmd_vel_timeout', Parameter.Type.DOUBLE)
+        self.declare_parameter('odom_topic', Parameter.Type.STRING)
+        self.declare_parameter('odom_frame_id', Parameter.Type.STRING)
+        self.declare_parameter('local_costmap_topic', Parameter.Type.STRING)
+        self.declare_parameter('local_costmap_width_m', Parameter.Type.DOUBLE)
+        self.declare_parameter('local_costmap_height_m', Parameter.Type.DOUBLE)
+        self.declare_parameter('gimbal_topic', Parameter.Type.STRING)
+        self.declare_parameter('scan_speed', Parameter.Type.DOUBLE)
+        self.declare_parameter('chassis_topic', Parameter.Type.STRING)
 
-        self.declare_parameter("robot_ids", Parameter.Type.STRING)
-        self.declare_parameter("init_xs", Parameter.Type.STRING)
-        self.declare_parameter("init_ys", Parameter.Type.STRING)
-        self.declare_parameter("tf_child_frame_ids", Parameter.Type.STRING)
+        self.declare_parameter('robot_ids', Parameter.Type.STRING)
+        self.declare_parameter('init_xs', Parameter.Type.STRING)
+        self.declare_parameter('init_ys', Parameter.Type.STRING)
+        self.declare_parameter('tf_child_frame_ids', Parameter.Type.STRING)
 
-        map_yaml = _resolve_package_uri(str(self._require_value("map_yaml")))
+        map_yaml = _resolve_package_uri(str(self._require_value('map_yaml')))
         if not map_yaml:
-            raise RuntimeError(_param_missing_msg(self.get_name(), "map_yaml"))
+            raise RuntimeError(_param_missing_msg(self.get_name(), 'map_yaml'))
 
-        self.topic = self._require_value("topic")
-        self.frame_id = self._require_value("frame_id")
+        self.topic    = self._require_value('topic')
+        self.frame_id = self._require_value('frame_id')
 
-        self.sim_hz = float(self._require_value("publish_hz"))
-        self.pub_hz = float(self._require_value("pub_hz"))
-        self.odom_hz = float(self._require_value("odom_hz"))
+        self.sim_hz  = float(self._require_value('publish_hz'))
+        self.pub_hz  = float(self._require_value('pub_hz'))
+        self.odom_hz = float(self._require_value('odom_hz'))
 
-        v_max = float(self._require_value("v_max"))
-        a_max = float(self._require_value("a_max"))
-        robot_radius = float(self._require_value("robot_radius"))
-        self.margin = float(self._require_value("margin"))
-        self.d_safe = float(self._require_value("d_safe"))
-        self.w_pen = float(self._require_value("w"))
+        v_max        = float(self._require_value('v_max'))
+        a_max        = float(self._require_value('a_max'))
+        robot_radius = float(self._require_value('robot_radius'))
+        self.margin = float(self._require_value('margin'))
+        self.d_safe = float(self._require_value('d_safe'))
+        self.w_pen = float(self._require_value('w'))
 
-        win_w = int(self._require_value("window_width"))
-        win_h = int(self._require_value("window_height"))
+        win_w  = int(self._require_value('window_width'))
+        win_h  = int(self._require_value('window_height'))
 
-        treat_unknown = bool(self._require_value("treat_unknown_as_occupied"))
+        treat_unknown = bool(self._require_value('treat_unknown_as_occupied'))
 
-        self.pos_noise_std = float(self._require_value("pos_noise_std"))
-        seed = int(self._require_value("seed"))
+        self.pos_noise_std = float(self._require_value('pos_noise_std'))
+        seed = int(self._require_value('seed'))
         if seed == 0:
-            seed = int(self.get_clock().now().nanoseconds % (2**31 - 1))
+            seed = int(self.get_clock().now().nanoseconds % (2 ** 31 - 1))
         self.rng = np.random.default_rng(seed)
 
-        sentry_id = int(self._require_value("robot_id"))
-        sentry_x = float(self._require_value("init_x"))
-        sentry_y = float(self._require_value("init_y"))
-        sentry_tf = str(self._require_value("tf_child_frame_id"))
-        cmd_vel_topic = str(self._require_value("cmd_vel_topic"))
-        cmd_vel_timeout = float(self._require_value("cmd_vel_timeout"))
-        self.odom_topic = str(self._require_value("odom_topic"))
-        self.odom_frame = str(self._require_value("odom_frame_id"))
-        self.local_costmap_topic = str(self._require_value("local_costmap_topic"))
-        self.local_costmap_width_m = float(self._require_value("local_costmap_width_m"))
-        self.local_costmap_height_m = float(self._require_value("local_costmap_height_m"))
-        gimbal_topic = str(self._require_value("gimbal_topic"))
-        scan_speed = float(self._require_value("scan_speed"))
-        chassis_topic = str(self._require_value("chassis_topic"))
+        sentry_id       = int(self._require_value('robot_id'))
+        sentry_x        = float(self._require_value('init_x'))
+        sentry_y        = float(self._require_value('init_y'))
+        sentry_tf       = str(self._require_value('tf_child_frame_id'))
+        cmd_vel_topic   = str(self._require_value('cmd_vel_topic'))
+        cmd_vel_timeout = float(self._require_value('cmd_vel_timeout'))
+        self.odom_topic = str(self._require_value('odom_topic'))
+        self.odom_frame = str(self._require_value('odom_frame_id'))
+        self.local_costmap_topic = str(self._require_value('local_costmap_topic'))
+        self.local_costmap_width_m = float(self._require_value('local_costmap_width_m'))
+        self.local_costmap_height_m = float(self._require_value('local_costmap_height_m'))
+        gimbal_topic    = str(self._require_value('gimbal_topic'))
+        scan_speed      = float(self._require_value('scan_speed'))
+        chassis_topic   = str(self._require_value('chassis_topic'))
 
-        extra_ids = [int(x) for x in str(self._require_value("robot_ids")).split(",") if x.strip()]
-        extra_xs = [float(x) for x in str(self._require_value("init_xs")).split(",") if x.strip()]
-        extra_ys = [float(x) for x in str(self._require_value("init_ys")).split(",") if x.strip()]
-        extra_tfs = [
-            x.strip()
-            for x in str(self._require_value("tf_child_frame_ids")).split(",")
-            if x.strip()
-        ]
+        extra_ids  = [int(x)   for x in str(self._require_value('robot_ids')).split(',')          if x.strip()]
+        extra_xs   = [float(x) for x in str(self._require_value('init_xs')).split(',')            if x.strip()]
+        extra_ys   = [float(x) for x in str(self._require_value('init_ys')).split(',')            if x.strip()]
+        extra_tfs  = [x.strip() for x in str(self._require_value('tf_child_frame_ids')).split(',') if x.strip()]
 
         map_rgb, map_occ, meta, map_path = load_sim_map(map_yaml, treat_unknown)
         map_h, map_w = map_rgb.shape[:2]
@@ -179,18 +174,14 @@ class SimRobotNode(Node):
         self.local_costmap_w = max(1, int(round(self.local_costmap_width_m / self.map_res)))
         self.local_costmap_h = max(1, int(round(self.local_costmap_height_m / self.map_res)))
 
-        default_pos = pixel_to_world(np.array([map_w / 2.0, map_h / 2.0]), meta, map_h)
+        default_pos = pixel_to_world(
+            np.array([map_w / 2.0, map_h / 2.0]), meta, map_h
+        )
 
         common_kwargs = dict(
-            v_max=v_max,
-            a_max=a_max,
-            robot_radius=robot_radius,
-            map_occ=map_occ,
-            meta=meta,
-            map_w=map_w,
-            map_h=map_h,
-            sim_hz=self.sim_hz,
-            scan_speed=scan_speed,
+            v_max=v_max, a_max=a_max, robot_radius=robot_radius,
+            map_occ=map_occ, meta=meta, map_w=map_w, map_h=map_h,
+            sim_hz=self.sim_hz, scan_speed=scan_speed,
         )
 
         sentry_pos = (
@@ -211,17 +202,16 @@ class SimRobotNode(Node):
 
         self.extra_robots: List[SimRobot] = []
         for i, rid in enumerate(extra_ids):
-            rx = extra_xs[i] if i < len(extra_xs) else default_pos[0] + 2.0 * (i + 1)
-            ry = extra_ys[i] if i < len(extra_ys) else default_pos[1]
-            rtf = extra_tfs[i] if i < len(extra_tfs) else f"base_link_{i + 2}"
+            rx   = extra_xs[i]  if i < len(extra_xs)  else default_pos[0] + 2.0 * (i + 1)
+            ry   = extra_ys[i]  if i < len(extra_ys)  else default_pos[1]
+            rtf  = extra_tfs[i] if i < len(extra_tfs) else f'base_link_{i + 2}'
             pos_i = (
                 np.array([rx, ry], dtype=float)
                 if not (math.isnan(rx) or math.isnan(ry))
                 else default_pos.copy() + np.array([2.0 * (i + 1), 0.0])
             )
             robot = SimRobot(
-                robot_id=rid,
-                init_pos=pos_i,
+                robot_id=rid, init_pos=pos_i,
                 tf_child_frame_id=rtf,
                 **common_kwargs,
             )
@@ -243,30 +233,21 @@ class SimRobotNode(Node):
         )
         self.gui._node_ref = self
 
-        self.tf_broadcaster = TransformBroadcaster(self)
+        self.tf_broadcaster        = TransformBroadcaster(self)
         self.static_tf_broadcaster = StaticTransformBroadcaster(self)
         self._publish_static_map_to_lidar_odom()
 
         self.robots_pub = self.create_publisher(RobotKinematicsArray, self.topic, 10)
-        self.odom_pub = self.create_publisher(Odometry, self.odom_topic, 10)
+        self.odom_pub   = self.create_publisher(Odometry, self.odom_topic, 10)
         self.local_costmap_pub = self.create_publisher(OccupancyGrid, self.local_costmap_topic, 10)
 
         self.local_costmap_enabled = True
-        self.create_service(
-            SetBool, "/set_local_costmap_enable", self._on_set_local_costmap_enable
-        )
+        self.create_service(SetBool, '/set_local_costmap_enable', self._on_set_local_costmap_enable)
 
-        pub_dt = 1.0 / max(self.pub_hz, 0.1)
+        pub_dt  = 1.0 / max(self.pub_hz,  0.1)
         odom_dt = 1.0 / max(self.odom_hz, 1.0)
-        self.create_timer(pub_dt, self._on_pub_timer)
-
-        # 临时诊断：将里程计发布与地图回调分组隔离。
-        self._odom_callback_group = MutuallyExclusiveCallbackGroup()
-        self._odom_timer = self.create_timer(
-            odom_dt,
-            self._on_odom_timer,
-            callback_group=self._odom_callback_group,
-        )
+        self.create_timer(pub_dt,  self._on_pub_timer)
+        self.create_timer(odom_dt, self._on_odom_timer)
 
         self.create_subscription(Twist, cmd_vel_topic, self._on_cmd_vel, 10)
         self.create_subscription(GimbalControlMsg, gimbal_topic, self._on_gimbal, 10)
@@ -292,9 +273,9 @@ class SimRobotNode(Node):
 
     def _publish_static_map_to_lidar_odom(self):
         t = TransformStamped()
-        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.stamp    = self.get_clock().now().to_msg()
         t.header.frame_id = self.frame_id
-        t.child_frame_id = self.odom_frame
+        t.child_frame_id  = self.odom_frame
         t.transform.translation.x = float(self.odom_origin_[0])
         t.transform.translation.y = float(self.odom_origin_[1])
         t.transform.translation.z = 0.0
@@ -318,7 +299,7 @@ class SimRobotNode(Node):
 
     def _on_chassis_mode(self, msg: ChassisModeMsg):
         self.sentry.set_chassis_stop(bool(msg.is_stop))
-        self.sentry.chassis_mode = getattr(msg, "mode", 0)
+        self.sentry.chassis_mode = getattr(msg, 'mode', 0)
         if not bool(msg.is_stop):
             self.sentry.chassis_rotate_velocity = float(msg.rotate_velocity)
         else:
@@ -347,7 +328,7 @@ class SimRobotNode(Node):
         now = self.get_clock().now().to_msg()
         arr = RobotKinematicsArray()
         arr.header = Header()
-        arr.header.stamp = now
+        arr.header.stamp    = now
         arr.header.frame_id = self.frame_id
 
         kinematic_list = []
@@ -368,8 +349,8 @@ class SimRobotNode(Node):
             pose.pose.orientation.x = 0.0
             pose.pose.orientation.y = 0.0
             cov = [0.0] * 36
-            cov[0] = self.pos_noise_std**2
-            cov[7] = self.pos_noise_std**2
+            cov[0] = self.pos_noise_std ** 2
+            cov[7] = self.pos_noise_std ** 2
             pose.covariance = cov
             r.pose = pose
 
@@ -482,7 +463,6 @@ class SimRobotNode(Node):
         free_u8 = np.where(obstacle, 0, 255).astype(np.uint8)
         try:
             import cv2
-
             dist_px = cv2.distanceTransform(free_u8, cv2.DIST_L2, 5)
         except ImportError:
             dist_px = self._edt_numpy(obstacle)
@@ -528,9 +508,9 @@ class SimRobotNode(Node):
         pos, vel, yaw = self.sentry.snapshot()
         pos_odom = pos - self.odom_origin_
         odom = Odometry()
-        odom.header.stamp = now
+        odom.header.stamp    = now
         odom.header.frame_id = self.odom_frame
-        odom.child_frame_id = self.sentry.tf_child_frame_id
+        odom.child_frame_id  = self.sentry.tf_child_frame_id
         odom.pose.pose.position.x = float(pos_odom[0])
         odom.pose.pose.position.y = float(pos_odom[1])
         odom.pose.pose.position.z = 0.0
@@ -539,38 +519,41 @@ class SimRobotNode(Node):
         odom.pose.pose.orientation.w = math.cos(half_yaw)
         odom.pose.pose.orientation.x = 0.0
         odom.pose.pose.orientation.y = 0.0
-        odom.pose.covariance = [0.0] * 36
-        odom.pose.covariance[0] = self.pos_noise_std**2
-        odom.pose.covariance[7] = self.pos_noise_std**2
-        odom.twist.twist.linear.x = float(vel[0])
-        odom.twist.twist.linear.y = float(vel[1])
+        odom.pose.covariance    = [0.0] * 36
+        odom.pose.covariance[0] = self.pos_noise_std ** 2
+        odom.pose.covariance[7] = self.pos_noise_std ** 2
+        odom.twist.twist.linear.x  = float(vel[0])
+        odom.twist.twist.linear.y  = float(vel[1])
 
         z_v_override = self.sentry.get_z_vel_override()
         if z_v_override != 0.0:
-            odom.twist.twist.linear.z = z_v_override
+            odom.twist.twist.linear.z  = z_v_override
         else:
-            odom.twist.twist.linear.z = 0.0
+            odom.twist.twist.linear.z  = 0.0
 
         odom.twist.twist.angular.z = 0.0
         odom.twist.covariance = [0.0] * 36
         self.odom_pub.publish(odom)
 
         self.tf_broadcaster.sendTransform(
-            self._make_tf(self.odom_frame, self.sentry.tf_child_frame_id, pos_odom, yaw, now)
+            self._make_tf(self.odom_frame, self.sentry.tf_child_frame_id,
+                          pos_odom, yaw, now)
         )
 
         for robot in self.extra_robots:
             pos_r, _, yaw_r = robot.snapshot()
             self.tf_broadcaster.sendTransform(
-                self._make_tf(self.frame_id, robot.tf_child_frame_id, pos_r, yaw_r, now)
+                self._make_tf(self.frame_id, robot.tf_child_frame_id,
+                              pos_r, yaw_r, now)
             )
 
     @staticmethod
-    def _make_tf(parent: str, child: str, pos: np.ndarray, yaw: float, stamp) -> TransformStamped:
+    def _make_tf(parent: str, child: str,
+                 pos: np.ndarray, yaw: float, stamp) -> TransformStamped:
         t = TransformStamped()
-        t.header.stamp = stamp
+        t.header.stamp    = stamp
         t.header.frame_id = parent
-        t.child_frame_id = child
+        t.child_frame_id  = child
         t.transform.translation.x = float(pos[0])
         t.transform.translation.y = float(pos[1])
         t.transform.translation.z = 0.0
@@ -580,7 +563,6 @@ class SimRobotNode(Node):
         t.transform.rotation.x = 0.0
         t.transform.rotation.y = 0.0
         return t
-
 
 def main():
     rclpy.init()
@@ -607,6 +589,5 @@ def main():
         rclpy.shutdown()
         pygame.quit()
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
