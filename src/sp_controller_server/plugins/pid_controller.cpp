@@ -74,12 +74,63 @@ void PidController::configure(
 void PidController::setPlan(const nav_msgs::msg::Path & path)
 {
   global_plan_ = path;
+  reference_velocity_profile_.clear();
 
   if (global_plan_.poses.empty()) {
     RCLCPP_WARN(node_->get_logger(), "Received an empty path");
     return;
   }
-  RCLCPP_DEBUG(node_->get_logger(), "Received a path with %zu poses", global_plan_.poses.size());
+
+  for (const auto & pose : global_plan_.poses) {
+    const auto & p = pose.pose.position;
+
+    if (!std::isfinite(p.x) || !std::isfinite(p.y)) {
+      RCLCPP_WARN(node_->get_logger(), "Path contains non-finite points");
+      global_plan_.poses.clear();
+      return;
+    }
+  }
+
+  reference_velocity_profile_.resize(global_plan_.poses.size());
+
+  // 用相邻一段路径的方向作为参考方向，减少栅格方向跳变。
+  const double half_window = 0.5 * lookahead_distance_;
+
+  for (std::size_t i = 0; i < global_plan_.poses.size(); ++i) {
+    std::size_t left     = i;
+    std::size_t right    = i;
+    double      distance = 0.0;
+
+    while (left > 0 && distance < half_window) {
+      const auto & a = global_plan_.poses[left - 1].pose.position;
+      const auto & b = global_plan_.poses[left].pose.position;
+
+      distance += std::hypot(b.x - a.x, b.y - a.y);
+      --left;
+    }
+
+    distance = 0.0;
+
+    while (right + 1 < global_plan_.poses.size() && distance < half_window) {
+      const auto & a = global_plan_.poses[right].pose.position;
+      const auto & b = global_plan_.poses[right + 1].pose.position;
+
+      distance += std::hypot(b.x - a.x, b.y - a.y);
+      ++right;
+    }
+
+    const auto & a = global_plan_.poses[left].pose.position;
+    const auto & b = global_plan_.poses[right].pose.position;
+
+    const double dx     = b.x - a.x;
+    const double dy     = b.y - a.y;
+    const double length = std::hypot(dx, dy);
+
+    if (length > 1e-9) {
+      reference_velocity_profile_[i].linear.x = max_linear_speed_ * dx / length;
+      reference_velocity_profile_[i].linear.y = max_linear_speed_ * dy / length;
+    }
+  }
 }
 
 geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
@@ -141,74 +192,66 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
       node_->get_logger(), "Nearest index: %zu,squared distance: %.4f", nearest_index,
       min_distance_squared);
 
-  std::size_t target_index         = nearest_index;
-  double      accumulated_distance = 0.0;
-
-  while (target_index + 1 < global_plan_.poses.size() &&
-         accumulated_distance < lookahead_distance_) {
-    const auto & current = global_plan_.poses[target_index].pose.position;
-    const auto & next    = global_plan_.poses[target_index + 1].pose.position;
-
-    accumulated_distance += std::hypot(next.x - current.x, next.y - current.y);
-    ++target_index;
+  if (reference_velocity_profile_.size() != global_plan_.poses.size()) {
+    RCLCPP_WARN_THROTTLE(
+        node_->get_logger(), *node_->get_clock(), 2000,
+        "Velocity profile does not match current path");
+    return cmd_vel;
   }
-
-  const auto & target = global_plan_.poses[target_index].pose.position;
-
-  RCLCPP_DEBUG(
-      node_->get_logger(), "Target index: %zu, position: (%.3f, %.3f)", target_index, target.x,
-      target.y);
-
-  const double error_x         = target.x - robot_x;
-  const double error_y         = target.y - robot_y;
-  const double target_distance = std::hypot(error_x, error_y);
-
-  RCLCPP_DEBUG(
-      node_->get_logger(), "Target error: (%.3f, %.3f), distance: %.3f", error_x, error_y,
-      target_distance);
-
-  double desired_vx = position_gain_ * error_x;
-  double desired_vy = position_gain_ * error_y;
-
-  const double desired_speed = std::hypot(desired_vx, desired_vy);
-
-  if (desired_speed > max_linear_speed_) {
-    const double scale  = max_linear_speed_ / desired_speed;
-    desired_vx         *= scale;
-    desired_vy         *= scale;
-  }
-
-  RCLCPP_DEBUG(
-      node_->get_logger(), "Desired path-frame velocity: (%.3f, %.3f)", desired_vx, desired_vy);
 
   if (!std::isfinite(velocity.linear.x) || !std::isfinite(velocity.linear.y)) {
     return cmd_vel;
   }
 
+  const auto & path_point = global_plan_.poses[nearest_index].pose.position;
+
+  double desired_vx = reference_velocity_profile_[nearest_index].linear.x;
+  double desired_vy = reference_velocity_profile_[nearest_index].linear.y;
+
+  // 接近终点时降低参考速度。
+  double goal_scale = goal_distance / lookahead_distance_;
+  if (goal_scale > 1.0) {
+    goal_scale = 1.0;
+  }
+
+  desired_vx *= goal_scale;
+  desired_vy *= goal_scale;
+
+  const double desired_speed = std::hypot(desired_vx, desired_vy);
+
+  if (!std::isfinite(desired_speed) || desired_speed < 1e-9) {
+    return cmd_vel;
+  }
+
+  // 路径切线及其左法向量，均在地图系。
+  const double tangent_x = desired_vx / desired_speed;
+  const double tangent_y = desired_vy / desired_speed;
+  const double normal_x  = -tangent_y;
+  const double normal_y  = tangent_x;
+
+  // 将“车到路径点”的误差投影到法向，只纠正横向偏差。
+  const double error_x       = path_point.x - robot_x;
+  const double error_y       = path_point.y - robot_y;
+  const double lateral_error = error_x * normal_x + error_y * normal_y;
+
   const double velocity_error_x = desired_vx - velocity.linear.x;
   const double velocity_error_y = desired_vy - velocity.linear.y;
 
-  RCLCPP_INFO_THROTTLE(
-      node_->get_logger(), *node_->get_clock(), 2000,
-      "Velocity: desired=(%.3f, %.3f), measured=(%.3f, %.3f), error=(%.3f, %.3f)", desired_vx,
-      desired_vy, velocity.linear.x, velocity.linear.y, velocity_error_x, velocity_error_y);
+  double command_vx =
+      desired_vx + position_gain_ * lateral_error * normal_x + velocity_gain_ * velocity_error_x;
 
-  // 速度 P 补偿，增益为本轮实验值。
-  constexpr double velocity_gain = 0.3;
+  double command_vy =
+      desired_vy + position_gain_ * lateral_error * normal_y + velocity_gain_ * velocity_error_y;
 
-  double command_vx = desired_vx + velocity_gain * velocity_error_x;
-  double command_vy = desired_vy + velocity_gain * velocity_error_y;
-
-  // 经过严谨的推导，我决定把补偿命令上限设为期望速度上限的两倍
-  const double command_speed_limit = 2.0 * max_linear_speed_;
-  const double command_speed       = std::hypot(command_vx, command_vy);
+  const double command_speed = std::hypot(command_vx, command_vy);
 
   if (!std::isfinite(command_speed)) {
     return cmd_vel;
   }
 
-  if (command_speed > command_speed_limit) {
-    const double scale  = command_speed_limit / command_speed;
+  // 第一版将纠偏后的总指令速度限制在 max_linear_speed_ 内。
+  if (command_speed > max_linear_speed_) {
+    const double scale  = max_linear_speed_ / command_speed;
     command_vx         *= scale;
     command_vy         *= scale;
   }
@@ -239,11 +282,12 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
 
   RCLCPP_INFO(
       node_->get_logger(),
-      "TRACE pos=(%.4f,%.4f) target=(%.4f,%.4f) yaw=%.4f "
+      "TRACE pos=(%.4f,%.4f) ref_point=(%.4f,%.4f) yaw=%.4f "
       "v_ref=(%.4f,%.4f) v_meas=(%.4f,%.4f) "
-      "cmd_map=(%.4f,%.4f) cmd_body=(%.4f,%.4f)",
-      robot_x, robot_y, target.x, target.y, yaw, desired_vx, desired_vy, velocity.linear.x,
-      velocity.linear.y, command_vx, command_vy, body_vx, body_vy);
+      "lateral_error=%.4f cmd_map=(%.4f,%.4f) "
+      "cmd_body=(%.4f,%.4f)",
+      robot_x, robot_y, path_point.x, path_point.y, yaw, desired_vx, desired_vy, velocity.linear.x,
+      velocity.linear.y, lateral_error, command_vx, command_vy, body_vx, body_vy);
 
   cmd_vel.twist.linear.x = body_vx;
   cmd_vel.twist.linear.y = body_vy;

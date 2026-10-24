@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/twist.hpp>
@@ -40,6 +41,10 @@ private:
   double                           position_gain_{1.0};
   double                           max_linear_speed_{0.2};
   double                           goal_tolerance_{0.18};
+  // 与路径点一一对应的地图系参考速度。
+  std::vector<geometry_msgs::msg::Twist> reference_velocity_profile_;
+
+  double velocity_gain_{0.3};
 };
 
 }
