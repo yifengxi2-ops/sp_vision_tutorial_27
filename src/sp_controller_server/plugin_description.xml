@@ -5,4 +5,8 @@
     base_class_type="sp_controller_server::ControllerPlugin">
     <description>Student path-tracking controller plugin (skeleton).</description>
   </class>
+  <class name="MpcController" type="mpc_controller::MpcController"
+         base_class_type="sp_controller_server::ControllerPlugin">
+    <description>Constrained receding-horizon tracking with collision-checked trajectory smoothing.</description>
+  </class>
 </library>

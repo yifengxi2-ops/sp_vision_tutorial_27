@@ -34,8 +34,8 @@ controller_server:
     base_frame_id: "base_link"
     control_frequency: 50.0
 
-    plugin_name: "PidController"
-    plugin_type: "PidController"
+    plugin_name: "MpcController"
+    plugin_type: "MpcController"
 
     PidController:
       base_frame_id: "base_link"

@@ -16,6 +16,9 @@
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
   <depend>std_srvs</depend>
+  <depend>std_msgs</depend>
+  <build_depend>eigen</build_depend>
+  <build_depend>eigen3_cmake_module</build_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
