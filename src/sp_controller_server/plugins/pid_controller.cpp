@@ -154,13 +154,73 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
     return cmd_vel;
   }
 
-  // 遍历寻找路径的最近点
-  const double robot_x = pose.pose.position.x;
-  const double robot_y = pose.pose.position.y;
+  const auto         now = node_->now();
+  const rclcpp::Time measurement_time(pose.header.stamp, now.get_clock_type());
 
-  if (!std::isfinite(robot_x) || !std::isfinite(robot_y)) {
+  const auto   stamp_ns  = measurement_time.nanoseconds();
+  const double state_age = (now - measurement_time).seconds();
+
+  // 与服务器保持一致：不对超过 0.2 s 的状态继续外推。
+  if (stamp_ns <= 0 || !std::isfinite(state_age) || state_age < 0.0 || state_age > 0.2) {
     return cmd_vel;
   }
+
+  const double measured_x = pose.pose.position.x;
+  const double measured_y = pose.pose.position.y;
+
+  if (!std::isfinite(measured_x) || !std::isfinite(measured_y) ||
+      !std::isfinite(velocity.linear.x) || !std::isfinite(velocity.linear.y)) {
+    return cmd_vel;
+  }
+
+  const auto & orientation = pose.pose.orientation;
+
+  if (!std::isfinite(orientation.x) || !std::isfinite(orientation.y) ||
+      !std::isfinite(orientation.z) || !std::isfinite(orientation.w)) {
+    return cmd_vel;
+  }
+
+  tf2::Quaternion rotation;
+  tf2::fromMsg(orientation, rotation);
+
+  if (rotation.length2() < 1e-12) {
+    return cmd_vel;
+  }
+
+  rotation.normalize();
+  const double measured_yaw = tf2::getYaw(rotation);
+
+  if (!have_previous_yaw_ || stamp_ns < previous_pose_stamp_ns_) {
+    // 首次测量或时间回退，重新建立历史。
+    have_previous_yaw_      = true;
+    previous_pose_stamp_ns_ = stamp_ns;
+    previous_yaw_           = measured_yaw;
+    estimated_yaw_rate_     = 0.0;
+  } else if (stamp_ns > previous_pose_stamp_ns_) {
+    const double measurement_dt = static_cast<double>(stamp_ns - previous_pose_stamp_ns_) * 1e-9;
+
+    // atan2 处理 yaw 跨越 ±π 时的角度差。
+    const double yaw_difference =
+        std::atan2(std::sin(measured_yaw - previous_yaw_), std::cos(measured_yaw - previous_yaw_));
+
+    // 间隔过长时角度展开可能产生歧义，丢弃这次变化率估计。
+    if (measurement_dt >= 0.001 && measurement_dt <= 0.5) {
+      estimated_yaw_rate_ = yaw_difference / measurement_dt;
+    } else {
+      estimated_yaw_rate_ = 0.0;
+    }
+
+    previous_pose_stamp_ns_ = stamp_ns;
+    previous_yaw_           = measured_yaw;
+  }
+
+  // 使用最后一次实测地图系速度做匀速外推。
+  const double robot_x = measured_x + velocity.linear.x * state_age;
+  const double robot_y = measured_y + velocity.linear.y * state_age;
+
+  const double predicted_yaw = measured_yaw + estimated_yaw_rate_ * state_age;
+
+  const double yaw = std::atan2(std::sin(predicted_yaw), std::cos(predicted_yaw));
 
   std::size_t nearest_index        = 0;
   double      min_distance_squared = std::numeric_limits<double>::infinity();
@@ -256,23 +316,6 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
     command_vy         *= scale;
   }
 
-  const auto & orientation = pose.pose.orientation;
-
-  if (!std::isfinite(orientation.x) || !std::isfinite(orientation.y) ||
-      !std::isfinite(orientation.z) || !std::isfinite(orientation.w)) {
-    return cmd_vel;
-  }
-
-  tf2::Quaternion rotation;
-  tf2::fromMsg(orientation, rotation);
-
-  if (rotation.length2() < 1e-12) {
-    return cmd_vel;
-  }
-
-  rotation.normalize();  // 归一化避免无效旋转
-  const double yaw = tf2::getYaw(rotation);
-
   // 进行坐标转换
   const double body_vx = std::cos(yaw) * command_vx + std::sin(yaw) * command_vy;
   const double body_vy = -std::sin(yaw) * command_vx + std::cos(yaw) * command_vy;
@@ -282,13 +325,15 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
 
   RCLCPP_INFO(
       node_->get_logger(),
-      "TRACE pos=(%.4f,%.4f) ref_point=(%.4f,%.4f) yaw=%.4f "
+      "TRACE measured=(%.4f,%.4f) pos=(%.4f,%.4f) "
+      "age=%.4f yaw_meas=%.4f yaw=%.4f yaw_rate=%.4f "
+      "ref_point=(%.4f,%.4f) "
       "v_ref=(%.4f,%.4f) v_meas=(%.4f,%.4f) "
       "lateral_error=%.4f cmd_map=(%.4f,%.4f) "
       "cmd_body=(%.4f,%.4f)",
-      robot_x, robot_y, path_point.x, path_point.y, yaw, desired_vx, desired_vy, velocity.linear.x,
-      velocity.linear.y, lateral_error, command_vx, command_vy, body_vx, body_vy);
-
+      measured_x, measured_y, robot_x, robot_y, state_age, measured_yaw, yaw, estimated_yaw_rate_,
+      path_point.x, path_point.y, desired_vx, desired_vy, velocity.linear.x, velocity.linear.y,
+      lateral_error, command_vx, command_vy, body_vx, body_vy);
   cmd_vel.twist.linear.x = body_vx;
   cmd_vel.twist.linear.y = body_vy;
 

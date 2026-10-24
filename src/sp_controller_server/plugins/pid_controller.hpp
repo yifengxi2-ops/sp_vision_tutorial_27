@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <cstdint>
 
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/twist.hpp>
@@ -45,6 +46,11 @@ private:
   std::vector<geometry_msgs::msg::Twist> reference_velocity_profile_;
 
   double velocity_gain_{0.3};
+  // 仅在收到不同时间戳的位姿时更新 yaw 变化率。
+  bool         have_previous_yaw_{false};
+  std::int64_t previous_pose_stamp_ns_{0};
+  double       previous_yaw_{0.0};
+  double       estimated_yaw_rate_{0.0};
 };
 
 }
