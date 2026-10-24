@@ -11,7 +11,6 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.exceptions import ParameterUninitializedException
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from ament_index_python.packages import get_package_share_directory
 
 from std_msgs.msg import Header
@@ -260,23 +259,9 @@ class SimRobotNode(Node):
         odom_dt = 1.0 / max(self.odom_hz, 1.0)
         self.create_timer(pub_dt, self._on_pub_timer)
 
-        # 临时诊断：隔离里程计与地图回调的互斥等待。
-        self._odom_callback_group = MutuallyExclusiveCallbackGroup()
-        self._odom_timer = self.create_timer(
-            odom_dt,
-            self._on_odom_timer,
-            callback_group=self._odom_callback_group,
-        )
+        self.create_timer(odom_dt, self._on_odom_timer)
 
-        # 临时诊断：避免指令接收被地图计算阻塞。
-        self._cmd_callback_group = MutuallyExclusiveCallbackGroup()
-        self.create_subscription(
-            Twist,
-            cmd_vel_topic,
-            self._on_cmd_vel,
-            10,
-            callback_group=self._cmd_callback_group,
-        )
+        self.create_subscription(Twist, cmd_vel_topic, self._on_cmd_vel, 10)
         self.create_subscription(GimbalControlMsg, gimbal_topic, self._on_gimbal, 10)
         self.create_subscription(ChassisModeMsg, chassis_topic, self._on_chassis_mode, 10)
 
