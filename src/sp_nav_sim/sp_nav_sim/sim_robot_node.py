@@ -268,7 +268,15 @@ class SimRobotNode(Node):
             callback_group=self._odom_callback_group,
         )
 
-        self.create_subscription(Twist, cmd_vel_topic, self._on_cmd_vel, 10)
+        # 临时诊断：避免指令接收被地图计算阻塞。
+        self._cmd_callback_group = MutuallyExclusiveCallbackGroup()
+        self.create_subscription(
+            Twist,
+            cmd_vel_topic,
+            self._on_cmd_vel,
+            10,
+            callback_group=self._cmd_callback_group,
+        )
         self.create_subscription(GimbalControlMsg, gimbal_topic, self._on_gimbal, 10)
         self.create_subscription(ChassisModeMsg, chassis_topic, self._on_chassis_mode, 10)
 
