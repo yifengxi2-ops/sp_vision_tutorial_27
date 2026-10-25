@@ -12,6 +12,8 @@
 
 namespace mpc_controller {
 namespace {
+constexpr double kPredictionFullSpeedAge = 0.2;
+constexpr double kPredictionStopAge = 0.4;
 bool positive(double x) { return std::isfinite(x) && x > 0.0; }
 bool nonnegative(double x) { return std::isfinite(x) && x >= 0.0; }
 
@@ -725,7 +727,7 @@ geometry_msgs::msg::TwistStamped MpcController::computeVelocityCommands(
   const auto & q = pose.pose.orientation;
   const double qnorm = q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w;
   if (measured.nanoseconds() <= 0 || !std::isfinite(age) || age < 0.0 ||
-      age >= sp_controller_server::kPredictionStopAge || !position.allFinite() ||
+      age >= kPredictionStopAge || !position.allFinite() ||
       !speed.allFinite() || !std::isfinite(qnorm) || qnorm < 1e-12 ||
       pose.header.frame_id != raw_path_.header.frame_id) { return stop(now, "invalid/stale feedback"); }
   const double global_age = global_map_ ? (now-global_received_).seconds() : -1.0;
@@ -774,9 +776,9 @@ geometry_msgs::msg::TwistStamped MpcController::computeVelocityCommands(
   State delayed = current;
   if (actuator_delay_ > 0.0) { delayed = MpcSolver::step(current, previous_command_, actuator_delay_, config_.tau); }
   const double uncertainty = base_uncertainty_ + std::min(0.05, model_error_) + config_.max_speed*age;
-  const double feedback_scale = age <= sp_controller_server::kPredictionFullSpeedAge ? 1.0 :
-      (sp_controller_server::kPredictionStopAge-age)/
-      (sp_controller_server::kPredictionStopAge-sp_controller_server::kPredictionFullSpeedAge);
+  const double feedback_scale = age <= kPredictionFullSpeedAge ? 1.0 :
+      (kPredictionStopAge-age)/
+      (kPredictionStopAge-kPredictionFullSpeedAge);
   const double error_scale = 1.0/(1.0+5.0*model_error_+2.0*nearest.distance);
   const double elapsed = command_stamp_ > 0 ? (now.nanoseconds()-command_stamp_)*1e-9 : 0.02;
   const double command_dt = std::max(0.001, std::min(0.1, elapsed));

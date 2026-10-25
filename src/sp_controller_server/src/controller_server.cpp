@@ -184,7 +184,7 @@ void ControllerServer::controlLoop()
   const auto         now = this->now();
   const rclcpp::Time odom_time(odom_copy.header.stamp, now.get_clock_type());
   const double       odom_age     = (now - odom_time).seconds();
-  constexpr double   max_odom_age = sp_controller_server::kPredictionStopAge;
+  constexpr double   max_odom_age = 0.4;
 
   if (!have_odom || odom_time.nanoseconds() <= 0 || !std::isfinite(odom_age) || odom_age < 0.0 ||
       odom_age > max_odom_age) {

@@ -160,8 +160,8 @@ geometry_msgs::msg::TwistStamped PidController::computeVelocityCommands(
   const auto   stamp_ns  = measurement_time.nanoseconds();
   const double state_age = (now - measurement_time).seconds();
 
-  constexpr double full_speed_age = sp_controller_server::kPredictionFullSpeedAge;
-  constexpr double stop_age       = sp_controller_server::kPredictionStopAge;
+  constexpr double full_speed_age = 0.2;
+  constexpr double stop_age       = 0.4;
 
   if (stamp_ns <= 0 || !std::isfinite(state_age) || state_age < 0.0 || state_age >= stop_age) {
     return cmd_vel;
