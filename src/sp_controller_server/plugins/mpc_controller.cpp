@@ -539,16 +539,13 @@ void MpcController::configure(const rclcpp::Node::SharedPtr & node, const std::s
       global_topic, rclcpp::QoS(1).reliable(),
       [this](nav_msgs::msg::OccupancyGrid::SharedPtr map) {
         std::lock_guard<std::mutex> lock(mutex_);
-        global_map_ = std::move(map);
-        global_received_ = node_->now();
-        dirty_ = true;
+        global_map_ = std::move(map); global_received_ = node_->now(); dirty_ = true;
       });
   local_sub_ = node_->create_subscription<nav_msgs::msg::OccupancyGrid>(
       local_topic, rclcpp::QoS(1).reliable(),
       [this](nav_msgs::msg::OccupancyGrid::SharedPtr map) {
         std::lock_guard<std::mutex> lock(mutex_);
-        local_map_ = std::move(map);
-        local_received_ = node_->now();
+        local_map_ = std::move(map); local_received_ = node_->now(); dirty_ = true;
       });
   goal_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
       "/goal_pose", rclcpp::QoS(1), [this](geometry_msgs::msg::PoseStamped::SharedPtr goal) {
@@ -674,22 +671,6 @@ void MpcController::publishPaths(const rclcpp::Time & stamp, const std::string &
   predicted_pub_->publish(make(positions));
 }
 
-geometry_msgs::msg::TwistStamped MpcController::hold(
-    const rclcpp::Time & now, double command_dt, const char * reason)
-{
-  const double maximum = config_.max_acceleration * std::max(0.001, std::min(0.1, command_dt));
-  previous_command_ = limit(previous_command_, config_.max_speed);
-  previous_command_ = limit(previous_command_, maximum);
-  command_stamp_ = now.nanoseconds();
-  geometry_msgs::msg::TwistStamped command;
-  command.header.stamp = now; command.header.frame_id = base_frame_;
-  command.twist.linear.x = previous_command_.x();
-  command.twist.linear.y = previous_command_.y();
-  RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
-                       "MPC holding previous command: %s", reason);
-  return command;
-}
-
 geometry_msgs::msg::TwistStamped MpcController::stop(const rclcpp::Time & now, const char * reason)
 {
   previous_command_.setZero(); command_stamp_ = now.nanoseconds();
@@ -730,10 +711,8 @@ geometry_msgs::msg::TwistStamped MpcController::computeVelocityCommands(
   }
   SafetyGrid grid(*global_map_, local_map_.get());
   if (!grid.ready() || grid.frame() != pose.header.frame_id) { return stop(now, "invalid map frame/data"); }
-  const double elapsed = command_stamp_ > 0 ? (now.nanoseconds()-command_stamp_)*1e-9 : 0.02;
-  const double command_dt = std::max(0.001, std::min(0.1, elapsed));
-  if (dirty_ && !preparePath(grid)) { return hold(now, command_dt, "path preparation unavailable"); }
-  if (path_.empty()) { return hold(now, command_dt, "empty trajectory"); }
+  if (dirty_ && !preparePath(grid)) { return stop(now, "no validated trajectory"); }
+  if (path_.empty()) { return stop(now, "empty trajectory"); }
   tf2::Quaternion rotation(q.x, q.y, q.z, q.w); rotation.normalize();
   const double yaw = tf2::getYaw(rotation);
   const std::int64_t stamp = measured.nanoseconds();
@@ -768,6 +747,8 @@ geometry_msgs::msg::TwistStamped MpcController::computeVelocityCommands(
       (kPredictionStopAge-age)/
       (kPredictionStopAge-kPredictionFullSpeedAge);
   const double error_scale = 1.0/(1.0+5.0*model_error_+2.0*nearest.distance);
+  const double elapsed = command_stamp_ > 0 ? (now.nanoseconds()-command_stamp_)*1e-9 : 0.02;
+  const double command_dt = std::max(0.001, std::min(0.1, elapsed));
   const auto started = std::chrono::steady_clock::now();
   SolverResult selected;
   Point output = Point::Zero();
@@ -790,7 +771,7 @@ geometry_msgs::msg::TwistStamped MpcController::computeVelocityCommands(
     candidate = limit(candidate, config_.max_speed*feedback_scale);
     selected = std::move(result); output = candidate; break;
   }
-  if (!selected.success) { return hold(now, command_dt, "no feasible MPC candidate"); }
+  if (!selected.success) { return stop(now, "no collision-checked MPC candidate"); }
   geometry_msgs::msg::TwistStamped command;
   command.header.stamp = now; command.header.frame_id = base_frame_;
   command.twist.linear.x = std::cos(yaw_now)*output.x()+std::sin(yaw_now)*output.y();

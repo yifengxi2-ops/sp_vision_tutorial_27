@@ -127,9 +127,8 @@ private:
   bool       preparePath(const SafetyGrid & grid);
   void       publishPaths(
       const rclcpp::Time & stamp, const std::string & frame, const std::vector<State> & predicted);
-  geometry_msgs::msg::TwistStamped stop(const rclcpp::Time & now, const char * reason);
-  geometry_msgs::msg::TwistStamped hold(const rclcpp::Time & now, double command_dt,
-                                        const char * reason);
+  geometry_msgs::msg::TwistStamped stop(const rclcpp::Time & now,
+                                         const char * reason);
 
   rclcpp::Node::SharedPtr                    node_;
   std::unique_ptr<MpcSolver>                 solver_;
