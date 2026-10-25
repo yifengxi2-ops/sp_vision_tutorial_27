@@ -111,7 +111,25 @@ void ControllerServer::onLocalPath(const nav_msgs::msg::Path::SharedPtr msg)
                std::fabs(pose.pose.orientation.y) > 1e-4;
       });
 
-  if (controller_) {
+  bool path_changed = true;
+  {
+    std::lock_guard<std::mutex> lock(path_mutex_);
+    path_changed = latest_path_.header.frame_id != processed_path.header.frame_id ||
+      latest_path_.poses.size() != processed_path.poses.size();
+    if (!path_changed) {
+      for (std::size_t i = 0; i < processed_path.poses.size(); ++i) {
+        const auto & a = latest_path_.poses[i].pose.position;
+        const auto & b = processed_path.poses[i].pose.position;
+        if (std::abs(a.x-b.x) > 1e-6 || std::abs(a.y-b.y) > 1e-6 ||
+            std::abs(a.z-b.z) > 1e-6) {
+          path_changed = true;
+          break;
+        }
+      }
+    }
+  }
+
+  if (controller_ && path_changed) {
     controller_->setPlan(processed_path);
   }
 
