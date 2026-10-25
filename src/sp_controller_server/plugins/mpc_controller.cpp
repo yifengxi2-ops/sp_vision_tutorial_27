@@ -539,13 +539,17 @@ void MpcController::configure(const rclcpp::Node::SharedPtr & node, const std::s
       global_topic, rclcpp::QoS(1).reliable(),
       [this](nav_msgs::msg::OccupancyGrid::SharedPtr map) {
         std::lock_guard<std::mutex> lock(mutex_);
-        global_map_ = std::move(map); global_received_ = node_->now(); dirty_ = true;
+        global_map_ = std::move(map);
+        global_received_ = node_->now();
+        dirty_ = true;
       });
   local_sub_ = node_->create_subscription<nav_msgs::msg::OccupancyGrid>(
       local_topic, rclcpp::QoS(1).reliable(),
       [this](nav_msgs::msg::OccupancyGrid::SharedPtr map) {
         std::lock_guard<std::mutex> lock(mutex_);
-        local_map_ = std::move(map); local_received_ = node_->now(); dirty_ = true;
+        local_map_ = std::move(map);
+        local_received_ = node_->now();
+        dirty_ = true;
       });
   goal_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
       "/goal_pose", rclcpp::QoS(1), [this](geometry_msgs::msg::PoseStamped::SharedPtr goal) {
@@ -648,38 +652,6 @@ Reference MpcController::sample(double arc) const
 }
 double MpcController::speedAt(double arc) const { return sample(arc).velocity.norm(); }
 
-bool MpcController::sweptSafe(const State & initial, const std::vector<Point> & controls,
-                             const SafetyGrid & grid, double uncertainty) const
-{
-  State state = initial;
-  auto move = [&](const Point & u, double duration, double radius) {
-    const int steps = std::max(1, static_cast<int>(std::ceil(duration/0.025)));
-    for (int step = 0; step < steps; ++step) {
-      const State next = MpcSolver::step(state, u, duration/steps, config_.tau);
-      if (!grid.segmentFree(state.position, next.position)) { return false; }
-      // This is a model-error envelope, not a second robot-footprint inflation.
-      for (int j = 0; j < 8; ++j) {
-        const double angle = j*std::acos(-1.0)/4.0;
-        const Point offset(radius*std::cos(angle), radius*std::sin(angle));
-        if (!grid.segmentFree(state.position+offset, next.position+offset)) { return false; }
-      }
-      state = next;
-    }
-    return true;
-  };
-  if (actuator_delay_ > 0.0 && !move(previous_command_, actuator_delay_, uncertainty)) { return false; }
-  for (std::size_t k = 0; k < controls.size(); ++k) {
-    const double radius = uncertainty + std::min(0.06, model_error_*config_.dt*(k+1));
-    if (!move(controls[k], config_.dt, radius)) { return false; }
-  }
-  // Check a zero-command tail, including residual velocity beyond the MPC horizon.
-  const int tail = static_cast<int>(std::ceil(4.0*config_.tau/config_.dt));
-  for (int k = 0; k < tail; ++k) {
-    if (!move(Point::Zero(), config_.dt, uncertainty+0.06)) { return false; }
-  }
-  return true;
-}
-
 void MpcController::publishPaths(const rclcpp::Time & stamp, const std::string & frame,
                                 const std::vector<State> & predicted)
 {
@@ -775,7 +747,6 @@ geometry_msgs::msg::TwistStamped MpcController::computeVelocityCommands(
   if (nearest.distance > max_tracking_error_) { return stop(now, "tracking error exceeds recovery corridor"); }
   State delayed = current;
   if (actuator_delay_ > 0.0) { delayed = MpcSolver::step(current, previous_command_, actuator_delay_, config_.tau); }
-  const double uncertainty = base_uncertainty_ + std::min(0.05, model_error_) + config_.max_speed*age;
   const double feedback_scale = age <= kPredictionFullSpeedAge ? 1.0 :
       (kPredictionStopAge-age)/
       (kPredictionStopAge-kPredictionFullSpeedAge);
@@ -802,14 +773,9 @@ geometry_msgs::msg::TwistStamped MpcController::computeVelocityCommands(
     Point candidate = previous_command_ + limit(result.controls.front()-previous_command_,
                                                 config_.max_acceleration*command_dt);
     candidate = limit(candidate, config_.max_speed*feedback_scale);
-    // Validate both the optimizer's sequence and the command actually emitted at 50 Hz.
-    auto actual = result.controls;
-    actual[0] = candidate;
-    if (!sweptSafe(current, result.controls, grid, uncertainty) ||
-        !sweptSafe(current, actual, grid, uncertainty)) { continue; }
     selected = std::move(result); output = candidate; break;
   }
-  if (!selected.success) { return stop(now, "no collision-checked MPC candidate"); }
+  if (!selected.success) { return stop(now, "no feasible MPC candidate"); }
   geometry_msgs::msg::TwistStamped command;
   command.header.stamp = now; command.header.frame_id = base_frame_;
   command.twist.linear.x = std::cos(yaw_now)*output.x()+std::sin(yaw_now)*output.y();
