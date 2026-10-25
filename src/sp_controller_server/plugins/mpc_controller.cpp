@@ -549,7 +549,6 @@ void MpcController::configure(const rclcpp::Node::SharedPtr & node, const std::s
         std::lock_guard<std::mutex> lock(mutex_);
         local_map_ = std::move(map);
         local_received_ = node_->now();
-        dirty_ = true;
       });
   goal_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
       "/goal_pose", rclcpp::QoS(1), [this](geometry_msgs::msg::PoseStamped::SharedPtr goal) {
